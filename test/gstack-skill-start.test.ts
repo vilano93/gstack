@@ -182,6 +182,39 @@ describe('gstack-skill-start behavior', () => {
     expect(blocks(quiet)).not.toContain('capy-asks');
   });
 
+  // Value: protects=panel hosts (Claude desktop app, VSCode) get the auq-panel block that moves the decision brief out
+  // of the plain-text question card, and nothing else does; fails_when=the block or AUQ_PANEL line is missing on a panel
+  // host, loses the brief-above / one-line-question / qid / (recommended) rules, or leaks into the terminal, Conductor,
+  // headless or spawned sessions; why_new=no host signal told a skill which surface renders `question` (#1208);
+  // seam=CLAUDE_CODE_ENTRYPOINT; no_claim=how each host renders the card or model compliance there (manual)
+  test('panel hosts get AUQ_PANEL and the auq-panel block; terminal, Conductor, headless and spawned get neither', () => {
+    const blocks = (out: string) => (out.match(/^GSTACK_INSTRUCTION_BEGIN: (\S+)/gm) ?? []).map((h) => h.replace(/^GSTACK_INSTRUCTION_BEGIN: /, ''));
+    for (const entrypoint of ['claude-desktop', 'claude-vscode']) {
+      const out = runStart([], { CLAUDE_CODE_ENTRYPOINT: entrypoint });
+      expect(out).toMatch(/^AUQ_PANEL: true$/m);
+      expect(blocks(out).filter((b) => b === 'auq-panel')).toHaveLength(1);
+      const block = out.slice(out.indexOf('GSTACK_INSTRUCTION_BEGIN: auq-panel'), out.indexOf('GSTACK_INSTRUCTION_END', out.indexOf('GSTACK_INSTRUCTION_BEGIN: auq-panel')));
+      expectMentions(block, [
+        ['brief', 'markdown', 'before', 'call'],
+        ['question', 'one line', 'D<N>'],
+        ['gstack-qid', 'question'],
+        ['(recommended)', 'option label'],
+      ], `${entrypoint} auq-panel block`);
+    }
+    const noPanel: Record<string, string>[] = [
+      { CLAUDE_CODE_ENTRYPOINT: 'cli' },
+      {},
+      { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop', GSTACK_HEADLESS: '1' },
+      { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop', GSTACK_SESSION_KIND: 'spawned' },
+      { CLAUDE_CODE_ENTRYPOINT: 'claude-desktop', CONDUCTOR_WORKSPACE_PATH: '/x' },
+    ];
+    for (const env of noPanel) {
+      const out = runStart([], env);
+      expect(out, JSON.stringify(env)).not.toContain('AUQ_PANEL');
+      expect(blocks(out), JSON.stringify(env)).not.toContain('auq-panel');
+    }
+  });
+
   test('sanitizes GSTACK_INSTRUCTION markers out of passthrough output (OV4)', () => {
     // Poison the learnings passthrough: >5 entries triggers learnings-search
     // passthrough; simplest deterministic injection point is FIRST_TASK via a

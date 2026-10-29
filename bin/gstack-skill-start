@@ -217,6 +217,17 @@ fi
 if [ "$_SESSION_KIND" != "headless" ] && [ "$_SESSION_KIND" != "spawned" ] && [ "$_SESSION_KIND" != "unattended" ] && { [ -n "${CONDUCTOR_WORKSPACE_PATH:-}" ] || [ -n "${CONDUCTOR_PORT:-}" ]; }; then
   echo "CONDUCTOR_SESSION: true"
 fi
+# Panel hosts: the Claude desktop app and the VSCode extension show the
+# AskUserQuestion `question` field as unformatted text in a narrow card, so a
+# full decision brief there is an unreadable wall (#1208). Interactive only,
+# and never under Conductor, which renders prose briefs instead. The rule
+# itself is the auq-panel block below, so terminal renders carry no bytes.
+_AUQ_PANEL=no
+if [ "$_SESSION_KIND" = "interactive" ] && [ -z "${CONDUCTOR_WORKSPACE_PATH:-}" ] && [ -z "${CONDUCTOR_PORT:-}" ]; then
+  case "${CLAUDE_CODE_ENTRYPOINT:-}" in
+    claude-desktop|claude-vscode) _AUQ_PANEL=yes; echo "AUQ_PANEL: true" ;;
+  esac
+fi
 _ACTIVATED=$([ -f "$_GH/.activated" ] && echo "yes" || echo "no")
 _FIRST_LOOP_SHOWN=$([ -f "$_GH/.first-loop-tip-shown" ] && echo "yes" || echo "no")
 echo "ACTIVATED: $_ACTIVATED"
@@ -690,6 +701,12 @@ fi
 if [ "$_CAPY" = "on" ] && [ "${GSTACK_CAPY_ASKS:-}" != "0" ]; then
   _emit_block capy-asks <<EOI
 You run under Capy. Every decision this workflow cannot take itself (a pending gate item, a consent, an unrecommended question, a plan approval) goes through Capy's messaging, never as a bare question or gate codes: in a crew thread, a needs-you report to your Captain; with no Captain, a Capy question to the person. Write it in plain language: what it is, why it matters, what each answer does and costs, your pick, and the one-word reply. A plan approval is rendered with \`gstack-owner-brief render --captain --out <run dir>\` (before -> after, why it matters, what caused this work, big decisions, what we need) and relayed whole; fix the plan first if it exits CAPTAIN_BRIEF_INCOMPLETE. Record every answer with the person's exact words: \`gstack-approvals add\` (or \`gstack-approvals import --autoplan <run dir>\` after an autoplan answer). Cite standing approvals your Captain lists instead of asking again; always ask fresh for a product or behaviour decision, spend over a stated cap, anything published outside the repository, a threshold, budget or trial-count change, closing someone's contribution without landing it, and anything destructive. A pull request opened by /ship follows its Capy section (What changed with before/after images, Why, Approvals). The launch environment reaches a command, your own or a child's, through \`. <the GSTACK_LAUNCH_FILE the installer printed>\` in the shell that runs it; never \`export \$(...)\`, \`env\`, \`printenv\` or a bare \`set\` in a tool fence: a bare \`export\` prints every variable, credentials included. Guide: capy/skill/gstack/captain.md in the gstack checkout.
+EOI
+fi
+
+if [ "$_AUQ_PANEL" = "yes" ]; then
+  _emit_block auq-panel <<EOI
+This host (Claude desktop app or VSCode) shows the AskUserQuestion \`question\` field as unformatted text in a narrow card, so a full decision brief there is unreadable. For every AskUserQuestion in this session, this replaces the Format rule that the brief lives in question text: write the complete decision brief (same fields and order, as markdown) as text in the same assistant message, directly before the tool call. The tool \`question\` is then one line: the \`D<N> — <title>\` line plus a short question, with no newlines, ELI10 or pros/cons. Keep the \`<gstack-qid:...>\` marker in that question when question tuning asks for it, and keep \`(recommended)\` on the recommended option label. Each option description is one short sentence; the ✅/❌ trade-offs live in the markdown brief. The prose fallback and the Conductor rule are unchanged.
 EOI
 fi
 
