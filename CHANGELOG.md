@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.91.317.0] - 2026-10-29
+
+**Decision questions are readable again in the Claude desktop app and VSCode: the brief sits above the card, the card holds one line.** Both hosts show the AskUserQuestion `question` field as plain text in a narrow card, so the full `D<N>` brief (ELI10, pros and cons, Net) arrived as one unformatted wall of text (#1208). `gstack-skill-start` now recognizes these two hosts and prints an `auq-panel` instruction. The brief goes into the message as markdown right before the call, and the card keeps the `D<N>` title and a short question. The terminal, Conductor, headless and spawned sessions behave exactly as before, and no SKILL.md grows by a byte.
+
+### Added
+- **`AUQ_PANEL: true`** and the **`auq-panel`** instruction block from `bin/gstack-skill-start`, printed when `CLAUDE_CODE_ENTRYPOINT` is `claude-desktop` or `claude-vscode` in an interactive session outside Conductor. The block keeps the `<gstack-qid:...>` marker in the question and `(recommended)` on the option label, so question tuning and auto-decide work unchanged.
+
+### Tests
+- `test/gstack-skill-start.test.ts`: both panel hosts get the line and exactly one block carrying the brief-above, one-line-question, qid and `(recommended)` rules; the CLI, a missing entrypoint, headless, spawned and Conductor sessions get neither.
+
+Contributed by @vilano93.
+
 ## [1.91.316.0] - 2026-10-29
 
 **/ship takes a token cap and stops cleanly at it, and long runs hand their heavy segments to fresh-context children.** On gstack-evals#31 a /ship spent 54M tokens against a 25M cap because the cap was only a number in a brief; #26, whose agent read the counter after every step, stopped at 39.40M of 40M. `/ship --token-cap 25M` (or `GSTACK_SHIP_TOKEN_CAP`) now admits each step and dispatch batch only when it fits, and a run started from a long-lived context, or one whose per-call charge passes 150k at Step 7 or Step 12, runs that segment in a fresh child.
